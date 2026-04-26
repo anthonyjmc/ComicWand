@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, Request, Response, status
 from redis.asyncio import Redis
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import Settings, get_settings
 from app.core.security import get_current_user
@@ -77,35 +79,49 @@ async def check_rate_limit(
     """FastAPI dependency that enforces user-based request and comic limits."""
     settings = get_settings()
     redis_client = Redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
-    limiter = RateLimiter(redis_client=redis_client, settings=settings)
+    try:
+        limiter = RateLimiter(redis_client=redis_client, settings=settings)
 
-    user_id = str(user.get("sub", ""))
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unable to identify authenticated user")
+        user_id = str(user.get("sub", ""))
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unable to identify authenticated user")
 
-    tier = str(user.get("tier", "free")).lower()
-    limits = settings.get_tier_limits(tier)
+        tier = str(user.get("tier", "free")).lower()
+        limits = settings.get_tier_limits(tier)
 
-    minute_result = await limiter.check(
-        user_id=user_id,
-        action=f"{action}:minute",
-        limit=limits["per_minute"],
-        window_seconds=60,
-    )
-    await limiter.check(
-        user_id=user_id,
-        action=f"{action}:hour",
-        limit=limits["per_hour"],
-        window_seconds=3600,
-    )
-
-    if action == "comic_generation":
+        minute_result = await limiter.check(
+            user_id=user_id,
+            action=f"{action}:minute",
+            limit=limits["per_minute"],
+            window_seconds=60,
+        )
         await limiter.check(
             user_id=user_id,
-            action=f"{action}:day",
-            limit=limits["per_day_comics"],
-            window_seconds=86400,
+            action=f"{action}:hour",
+            limit=limits["per_hour"],
+            window_seconds=3600,
         )
 
-    _attach_rate_headers(response, minute_result)
-    request.state.rate_limit = minute_result
+        if action == "comic_generation":
+            await limiter.check(
+                user_id=user_id,
+                action=f"{action}:day",
+                limit=limits["per_day_comics"],
+                window_seconds=86400,
+            )
+
+        _attach_rate_headers(response, minute_result)
+        request.state.rate_limit = minute_result
+    finally:
+        await redis_client.aclose()
+
+
+def get_user_rate_limit_key(request: Request) -> str:
+    """Use authenticated user id for rate limits with IP fallback."""
+    user_id = str(getattr(request.state, "user_id", "")).strip()
+    if user_id:
+        return user_id
+    return get_remote_address(request)
+
+
+slowapi_limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])

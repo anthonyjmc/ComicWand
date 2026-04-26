@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     clerk_secret_key: str = Field(alias="CLERK_SECRET_KEY")
     clerk_webhook_secret: str = Field(alias="CLERK_WEBHOOK_SECRET")
     allowed_origins: str = Field(alias="ALLOWED_ORIGINS")
+    allowed_hosts: str = Field(default="localhost,127.0.0.1", alias="ALLOWED_HOSTS")
     max_pages_per_comic: int = Field(default=48, alias="MAX_PAGES_PER_COMIC")
     max_comics_per_day: int = Field(default=5, alias="MAX_COMICS_PER_DAY")
     max_file_size_mb: int = Field(default=10, alias="MAX_FILE_SIZE_MB")
@@ -62,6 +63,11 @@ class Settings(BaseSettings):
     def parsed_allowed_origins(self) -> list[str]:
         """Split ALLOWED_ORIGINS into normalized list."""
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def parsed_allowed_hosts(self) -> list[str]:
+        """Split ALLOWED_HOSTS into normalized list."""
+        return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
 
     def get_tier_limits(self, tier: str) -> dict[str, int]:
         """Get configured limits for a user tier."""

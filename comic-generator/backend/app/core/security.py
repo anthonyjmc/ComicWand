@@ -8,7 +8,7 @@ from urllib.request import urlopen
 from html import unescape
 from typing import Any
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Header, HTTPException, Request, status
 from jose import JWTError, jwk, jwt
 from jose.utils import base64url_decode
 
@@ -101,7 +101,9 @@ def validate_file_extension(filename: str) -> str:
     return extension
 
 
-async def get_current_user(authorization: str = Header(default="")) -> dict[str, Any]:
+async def get_current_user(request: Request, authorization: str = Header(default="")) -> dict[str, Any]:
     """FastAPI dependency returning authenticated user claims."""
-    return verify_clerk_token(authorization)
+    claims = verify_clerk_token(authorization)
+    request.state.user_id = str(claims.get("sub", ""))
+    return claims
 
