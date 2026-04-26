@@ -143,10 +143,12 @@ async def get_comic_status(
 ) -> ComicStatusResponse:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
-    result = await session.execute(select(Comic).where(and_(Comic.id == comic_id, Comic.user_id == user.id)))
+    result = await session.execute(select(Comic).where(Comic.id == comic_id))
     comic = result.scalar_one_or_none()
     if comic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
+    if comic.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
 
     payload = ComicStatusResponse(comic_id=comic.id, status=comic.status.value)
     if comic.status == ComicStatus.processing:
@@ -230,10 +232,12 @@ async def delete_comic(
 ) -> Response:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
-    result = await session.execute(select(Comic).where(and_(Comic.id == comic_id, Comic.user_id == user.id)))
+    result = await session.execute(select(Comic).where(Comic.id == comic_id))
     comic = result.scalar_one_or_none()
     if comic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
+    if comic.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
 
     if comic.status == ComicStatus.processing:
         inspect_result = await asyncio.to_thread(celery_app.control.inspect().active)
@@ -268,10 +272,12 @@ async def list_comic_pages(
 ) -> list[ComicPageResponse]:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
-    result = await session.execute(select(Comic).where(and_(Comic.id == comic_id, Comic.user_id == user.id)))
+    result = await session.execute(select(Comic).where(Comic.id == comic_id))
     comic = result.scalar_one_or_none()
     if comic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
+    if comic.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
     if comic.status != ComicStatus.completed:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Comic pages are available only when completed")
 

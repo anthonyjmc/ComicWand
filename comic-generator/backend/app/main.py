@@ -23,6 +23,7 @@ from app.core.database import SessionFactory
 from app.core.logging import configure_logging
 from app.core.logging import log_api_call
 from app.core.rate_limiter import slowapi_limiter
+from app.core.security_headers import add_security_headers
 from app.workers.celery_app import celery_app
 
 settings = get_settings()
@@ -55,13 +56,7 @@ async def request_size_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-@app.middleware("http")
-async def security_headers_middleware(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    return response
+app.middleware("http")(add_security_headers)
 
 
 @app.middleware("http")

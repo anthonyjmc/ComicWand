@@ -73,7 +73,7 @@ def sanitize_prompt(text: str) -> str:
     if not text or not text.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Prompt is required")
     if len(text) > 2000:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Prompt exceeds 2000 characters")
+        text = text[:2000]
 
     normalized_text = unescape(text)
     stripped_html = TAG_RE.sub("", normalized_text)
