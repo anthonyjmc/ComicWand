@@ -2,7 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background: #050816;
-  color: #f8fafc;
+@layer base {
+  :root {
+    --background: 224 64% 5%;
+    --foreground: 210 40% 98%;
+    --primary: 46 98% 62%;
+    --primary-foreground: 224 64% 5%;
+    --border: 217 33% 24%;
+    --input: 217 33% 24%;
+    --ring: 46 98% 62%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: radial-gradient(circle at top right, rgba(254, 240, 138, 0.1), transparent 35%);
+  }
+
+  .comic-title {
+    text-shadow: 3px 3px 0 #facc15;
+  }
 }
