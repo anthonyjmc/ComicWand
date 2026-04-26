@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#020617"/>
+  <text x="80" y="260" fill="#fde047" font-size="120" font-family="Arial Black">ComicWand</text>
+  <text x="80" y="360" fill="#e2e8f0" font-size="54" font-family="Arial">Generate full comic books from prompts</text>
+</svg>

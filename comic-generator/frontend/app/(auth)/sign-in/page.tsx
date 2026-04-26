@@ -1,7 +1,9 @@
-/**
- * Sign-in page placeholder route.
- */
+import { SignIn } from '@clerk/nextjs'
 
 export default function SignInPage() {
-  return <main className='p-8'>Sign in</main>
+  return (
+    <main className='flex min-h-screen items-center justify-center p-6'>
+      <SignIn />
+    </main>
+  )
 }

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#1e293b"/>
+  <circle cx="200" cy="180" r="100" fill="#f59e0b"/>
+  <rect x="340" y="120" width="300" height="280" rx="20" fill="#0ea5e9"/>
+  <text x="50" y="520" fill="#f8fafc" font-size="48" font-family="Arial">Comic Preview 1</text>
+</svg>

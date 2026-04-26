@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#0f172a"/>
+  <polygon points="120,480 280,120 460,420" fill="#22c55e"/>
+  <circle cx="620" cy="200" r="120" fill="#3b82f6"/>
+  <text x="50" y="540" fill="#f8fafc" font-size="48" font-family="Arial">Comic Preview 3</text>
+</svg>

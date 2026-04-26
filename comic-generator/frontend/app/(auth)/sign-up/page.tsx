@@ -1,7 +1,9 @@
-/**
- * Sign-up page placeholder route.
- */
+import { SignUp } from '@clerk/nextjs'
 
 export default function SignUpPage() {
-  return <main className='p-8'>Sign up</main>
+  return (
+    <main className='flex min-h-screen items-center justify-center p-6'>
+      <SignUp />
+    </main>
+  )
 }
