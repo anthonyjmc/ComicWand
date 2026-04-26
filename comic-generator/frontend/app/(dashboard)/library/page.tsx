@@ -1,7 +1,5 @@
-/**
- * Comic library route for authenticated users.
- */
+import { redirect } from 'next/navigation'
 
 export default function LibraryPage() {
-  return <main className='p-8'>Library</main>
+  redirect('/dashboard')
 }
