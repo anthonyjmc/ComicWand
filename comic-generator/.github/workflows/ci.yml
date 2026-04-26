@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest-cov
+      - name: Run pytest with coverage
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=term-missing
+      - name: Enforce critical file coverage >= 70%
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          tree = ET.parse("coverage.xml")
+          root = tree.getroot()
+          required = {
+              "app/core/rate_limiter.py": 70.0,
+              "app/core/security.py": 70.0,
+          }
+          rates = {}
+          for cls in root.findall(".//class"):
+            filename = cls.attrib.get("filename", "")
+            if filename in required:
+              rates[filename] = float(cls.attrib.get("line-rate", 0.0)) * 100
+
+          failures = []
+          for filename, threshold in required.items():
+            value = rates.get(filename, 0.0)
+            if value < threshold:
+              failures.append(f"{filename}: {value:.2f}% < {threshold:.2f}%")
+
+          if failures:
+            print("Coverage gates failed:")
+            for line in failures:
+              print(f"- {line}")
+            sys.exit(1)
+          print("Critical file coverage gates passed")
+          PY
+
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Run eslint
+        run: npm run lint
+      - name: Run TypeScript check
+        run: npx tsc --noEmit
+
+  security-scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+      - name: Run bandit scan
+        run: bandit -r app -ll
