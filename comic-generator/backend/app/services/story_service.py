@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.core.config import get_settings
 
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
 MAX_RETRIES = 3
 REQUEST_TIMEOUT_SECONDS = 60
 INPUT_COST_PER_MILLION = 3.0
@@ -85,6 +84,7 @@ class StoryService:
     def __init__(self) -> None:
         settings = get_settings()
         self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._model = settings.anthropic_model
 
     async def generate_script(self, prompt: str, pages: int, style: str) -> dict[str, Any]:
         """Generate a production-ready comic script as valid JSON."""
@@ -158,7 +158,7 @@ class StoryService:
     async def _request_claude(self, *, system_prompt: str, user_prompt: str) -> tuple[str, ClaudeUsage]:
         response = await asyncio.wait_for(
             self.client.messages.create(
-                model=CLAUDE_MODEL,
+                model=self._model,
                 max_tokens=4096,
                 temperature=0.7,
                 system=system_prompt,

@@ -12,18 +12,18 @@ import httpx
 from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.database import SessionFactory
 from app.models.comic import Comic, ComicPage, ComicStatus, PageStatus
+from app.models.user import User  # noqa: F401 — ensures Comic.user relationship resolves in worker
 from app.services.compositor_service import CompositorService
 from app.services.image_service import ImageService
 from app.services.story_service import StoryService
 from app.workers.celery_app import celery_app
 
 settings = get_settings()
-engine = create_async_engine(settings.database_url, future=True)
-SessionFactory = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
 
 @celery_app.task(name="comic.generate")
@@ -87,17 +87,16 @@ async def _run_generation_pipeline(comic_id: str, user_id: str) -> dict[str, str
                 camera_angles = [panel.get("camera_angle", "medium") for panel in panels]
                 character_description = _build_character_description(panels=panels)
 
-                panel_urls = await asyncio.gather(
-                    *(
-                        image_service.generate_panel_image(
-                            scene_description=scene_description,
-                            style=comic.style,
-                            reference_image_url=comic.reference_image_url,
-                            character_description=character_description,
-                        )
-                        for scene_description in scene_descriptions
+                # Sequential calls: Replicate free tier allows very low create burst; parallel gather hits 429.
+                panel_urls: list[str] = []
+                for scene_description in scene_descriptions:
+                    panel_url = await image_service.generate_panel_image(
+                        scene_description=scene_description,
+                        style=comic.style,
+                        reference_image_url=comic.reference_image_url,
+                        character_description=character_description,
                     )
-                )
+                    panel_urls.append(panel_url)
 
                 composed_page_bytes = await compositor_service.compose_page(
                     panel_images=panel_urls,
