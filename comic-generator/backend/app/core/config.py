@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     database_url: str = Field(alias="DATABASE_URL")
     redis_url: str = Field(alias="REDIS_URL")
     replicate_api_token: str = Field(alias="REPLICATE_API_TOKEN")
+    replicate_image_model: str = Field(default="black-forest-labs/flux-1.1-pro", alias="REPLICATE_IMAGE_MODEL")
     anthropic_api_key: str = Field(alias="ANTHROPIC_API_KEY")
+    anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
     cloudflare_r2_bucket: str = Field(alias="CLOUDFLARE_R2_BUCKET")
     cloudflare_r2_access_key: str = Field(alias="CLOUDFLARE_R2_ACCESS_KEY")
     cloudflare_r2_secret_key: str = Field(alias="CLOUDFLARE_R2_SECRET_KEY")
@@ -31,12 +33,12 @@ class Settings(BaseSettings):
     max_comics_per_day: int = Field(default=5, alias="MAX_COMICS_PER_DAY")
     max_file_size_mb: int = Field(default=10, alias="MAX_FILE_SIZE_MB")
 
-    request_limit_per_minute_free: int = 20
-    request_limit_per_hour_free: int = 100
-    comic_limit_per_day_free: int = 5
-    request_limit_per_minute_pro: int = 60
-    request_limit_per_hour_pro: int = 300
-    comic_limit_per_day_pro: int = 25
+    request_limit_per_minute_free: int = 1000
+    request_limit_per_hour_free: int = 1000
+    comic_limit_per_day_free: int = 1000
+    request_limit_per_minute_pro: int = 1000
+    request_limit_per_hour_pro: int = 1000
+    comic_limit_per_day_pro: int = 1000
 
     @field_validator("database_url")
     @classmethod
