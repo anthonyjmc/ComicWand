@@ -1,5 +1,7 @@
 """Celery app factory and worker configuration."""
 
+import ssl
+
 from celery import Celery
 
 from app.core.config import get_settings
@@ -22,3 +24,7 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     imports=("app.workers.celery_tasks",),
 )
+
+if settings.redis_url.startswith("rediss://"):
+    celery_app.conf.broker_use_ssl = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+    celery_app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": ssl.CERT_REQUIRED}

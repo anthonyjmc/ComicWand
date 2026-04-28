@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 160">
+  <defs>
+    <linearGradient id="cartoon-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#22c55e" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="160" fill="url(#cartoon-bg)" rx="12" />
+  <circle cx="66" cy="70" r="30" fill="#fef3c7" />
+  <circle cx="56" cy="64" r="5" fill="#1f2937" />
+  <circle cx="76" cy="64" r="5" fill="#1f2937" />
+  <path d="M50 82 Q66 96 82 82" stroke="#1f2937" stroke-width="4" fill="none" stroke-linecap="round" />
+  <text x="112" y="56" fill="#f0fdfa" font-size="20" font-family="Arial, sans-serif" font-weight="700">CARTOON</text>
+  <text x="112" y="84" fill="#dcfce7" font-size="12" font-family="Arial, sans-serif">Playful, colorful vibe</text>
+</svg>

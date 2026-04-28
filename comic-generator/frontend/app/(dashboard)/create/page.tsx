@@ -213,11 +213,11 @@ export default function CreatePage() {
 }
 
 const styles: Array<{ value: ComicStyle; label: string; preview: string }> = [
-  { value: 'manga', label: 'Manga', preview: '/sample-1.svg' },
-  { value: 'western', label: 'Western', preview: '/sample-2.svg' },
-  { value: 'superhero', label: 'Superhero', preview: '/sample-3.svg' },
-  { value: 'cartoon', label: 'Cartoon', preview: '/sample-1.svg' },
-  { value: 'noir', label: 'Noir', preview: '/sample-2.svg' },
+  { value: 'manga', label: 'Manga', preview: '/style-manga.svg' },
+  { value: 'western', label: 'Western', preview: '/style-western.svg' },
+  { value: 'superhero', label: 'Superhero', preview: '/style-superhero.svg' },
+  { value: 'cartoon', label: 'Cartoon', preview: '/style-cartoon.svg' },
+  { value: 'noir', label: 'Noir', preview: '/style-noir.svg' },
 ]
 
 const promptExamples = [

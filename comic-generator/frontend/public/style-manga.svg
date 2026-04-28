@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 160">
+  <defs>
+    <linearGradient id="manga-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#374151" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="160" fill="url(#manga-bg)" rx="12" />
+  <g opacity="0.35" stroke="#f9fafb" stroke-width="2">
+    <line x1="10" y1="150" x2="150" y2="10" />
+    <line x1="60" y1="150" x2="200" y2="10" />
+    <line x1="110" y1="150" x2="250" y2="10" />
+    <line x1="160" y1="150" x2="300" y2="10" />
+  </g>
+  <rect x="18" y="18" width="130" height="124" fill="#f3f4f6" rx="8" />
+  <circle cx="82" cy="66" r="24" fill="#111827" />
+  <rect x="58" y="92" width="48" height="30" fill="#111827" rx="6" />
+  <text x="168" y="64" fill="#f9fafb" font-size="20" font-family="Arial, sans-serif" font-weight="700">MANGA</text>
+  <text x="168" y="92" fill="#d1d5db" font-size="12" font-family="Arial, sans-serif">B&amp;W panels, speed lines</text>
+</svg>

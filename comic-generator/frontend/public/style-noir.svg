@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 160">
+  <defs>
+    <linearGradient id="noir-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="160" fill="url(#noir-bg)" rx="12" />
+  <rect x="0" y="112" width="320" height="48" fill="#0f172a" />
+  <path d="M54 112 L70 44 L86 112 Z" fill="#f8fafc" opacity="0.88" />
+  <circle cx="240" cy="38" r="20" fill="#f8fafc" opacity="0.24" />
+  <text x="110" y="58" fill="#e2e8f0" font-size="20" font-family="Arial, sans-serif" font-weight="700">NOIR</text>
+  <text x="110" y="86" fill="#94a3b8" font-size="12" font-family="Arial, sans-serif">Moody shadows, contrast</text>
+</svg>

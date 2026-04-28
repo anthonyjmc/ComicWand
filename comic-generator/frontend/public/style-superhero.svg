@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 160">
+  <defs>
+    <linearGradient id="hero-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#7e22ce" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="160" fill="url(#hero-bg)" rx="12" />
+  <polygon points="70,18 82,48 114,50 90,70 98,100 70,82 42,100 50,70 26,50 58,48" fill="#fde047" />
+  <path d="M210 116 L180 116 L168 88 L190 88 L198 70 L220 70 L228 88 L252 88 L240 116 Z" fill="#f8fafc" opacity="0.92" />
+  <text x="124" y="52" fill="#f8fafc" font-size="20" font-family="Arial, sans-serif" font-weight="700">SUPERHERO</text>
+  <text x="124" y="80" fill="#e9d5ff" font-size="12" font-family="Arial, sans-serif">High-action dynamic shots</text>
+</svg>

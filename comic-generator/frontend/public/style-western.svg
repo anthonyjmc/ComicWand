@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 160">
+  <defs>
+    <linearGradient id="west-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c2d12" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="160" fill="url(#west-bg)" rx="12" />
+  <rect x="0" y="112" width="320" height="48" fill="#92400e" />
+  <circle cx="56" cy="56" r="20" fill="#fde68a" />
+  <rect x="42" y="72" width="28" height="36" fill="#1f2937" rx="5" />
+  <rect x="38" y="42" width="36" height="8" fill="#1f2937" />
+  <text x="98" y="62" fill="#fff7ed" font-size="20" font-family="Arial, sans-serif" font-weight="700">WESTERN</text>
+  <text x="98" y="90" fill="#fed7aa" font-size="12" font-family="Arial, sans-serif">Classic comic adventure</text>
+</svg>

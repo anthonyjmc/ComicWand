@@ -25,11 +25,12 @@ def _migration_engine_url() -> str:
     """Build a sync SQLAlchemy URL for Alembic DDL.
 
     The FastAPI app uses async SQLAlchemy with asyncpg, but Alembic runs synchronously.
-    We map `postgresql+asyncpg` -> `postgresql+pg8000` which works well with managed Postgres (Supabase).
+    We map `postgresql+asyncpg` -> `postgresql+psycopg` so `sslmode=require`
+    query params from managed Postgres providers (e.g. Supabase) work out of the box.
     """
     url = make_url(get_settings().database_url)
     if url.drivername in {"postgresql+asyncpg", "postgres+asyncpg"}:
-        url = url.set(drivername="postgresql+pg8000")
+        url = url.set(drivername="postgresql+psycopg")
     return url.render_as_string(hide_password=False)
 
 

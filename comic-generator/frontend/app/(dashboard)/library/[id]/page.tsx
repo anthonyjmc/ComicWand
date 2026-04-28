@@ -45,8 +45,17 @@ export default function ComicLibraryPage() {
       <section className='grid grid-cols-2 gap-4 lg:grid-cols-3'>
         {pages.map((page, index) => (
           <article key={page.page_number} className='space-y-2 rounded-lg border border-slate-700 p-3'>
-            <button type='button' onClick={() => setActiveIndex(index)} aria-label={`Open page ${page.page_number}`}>
-              <Image src={page.image_url} alt={`Page ${page.page_number}`} className='h-56 w-full rounded object-cover' width={640} height={896} unoptimized />
+            <button type='button' className='block w-full' onClick={() => setActiveIndex(index)} aria-label={`Open page ${page.page_number}`}>
+              <div className='relative h-56 w-full overflow-hidden rounded'>
+                <Image
+                  src={page.image_url}
+                  alt={`Page ${page.page_number}`}
+                  className='object-cover'
+                  fill
+                  sizes='(max-width: 1024px) 50vw, 33vw'
+                  unoptimized
+                />
+              </div>
             </button>
             <div className='flex items-center justify-between'>
               <p className='text-sm'>Page {page.page_number}</p>
@@ -64,7 +73,16 @@ export default function ComicLibraryPage() {
         <DialogContent>
           {activePage ? (
             <div className='space-y-4'>
-              <Image src={activePage.image_url} alt={`Page ${activePage.page_number} full view`} className='max-h-[80vh] w-full rounded object-contain' width={1000} height={1400} unoptimized />
+              <div className='relative h-[80vh] w-full overflow-hidden rounded'>
+                <Image
+                  src={activePage.image_url}
+                  alt={`Page ${activePage.page_number} full view`}
+                  className='object-cover'
+                  fill
+                  sizes='100vw'
+                  unoptimized
+                />
+              </div>
               <div className='flex justify-between'>
                 <Button variant='secondary' onClick={() => setActiveIndex((current) => (current && current > 0 ? current - 1 : current))} aria-label='Previous page'>
                   Previous
