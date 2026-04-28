@@ -11,6 +11,10 @@
     --border: 217 33% 24%;
     --input: 217 33% 24%;
     --ring: 46 98% 62%;
+    --font-sans:
+      ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-comic:
+      'Comic Sans MS', 'Comic Neue', 'Marker Felt', 'Bradley Hand', 'Segoe Print', cursive;
   }
 
   * {

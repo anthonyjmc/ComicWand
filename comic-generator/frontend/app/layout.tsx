@@ -1,16 +1,12 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { ClerkProvider } from '@clerk/nextjs'
-import { Bangers, Inter } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
 
 interface RootLayoutProps {
   children: ReactNode
 }
-
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
-const bangers = Bangers({ subsets: ['latin'], weight: '400', variable: '--font-comic' })
 
 export const metadata: Metadata = {
   title: 'ComicWand - AI Comic Book Generator',
@@ -25,7 +21,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang='en'>
-      <body className={`${inter.variable} ${bangers.variable} font-sans`}>
+      <body className='font-sans'>
         <ClerkProvider>
           {children}
           <Toaster richColors position='top-right' />

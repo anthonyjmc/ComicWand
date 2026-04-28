@@ -6,5 +6,16 @@ import { ApiClient } from '@/lib/api-client'
 
 export function useApiClient(): ApiClient {
   const { getToken } = useAuth()
-  return useMemo(() => new ApiClient({ getToken }), [getToken])
+  const clerkJwtTemplate = process.env.NEXT_PUBLIC_CLERK_JWT_TEMPLATE
+
+  return useMemo(
+    () =>
+      new ApiClient({
+        getToken: async () => {
+          if (!clerkJwtTemplate) return getToken()
+          return getToken({ template: clerkJwtTemplate })
+        },
+      }),
+    [getToken, clerkJwtTemplate]
+  )
 }
