@@ -29,18 +29,19 @@ class Settings(BaseSettings):
     clerk_webhook_secret: str = Field(alias="CLERK_WEBHOOK_SECRET")
     clerk_issuer: str | None = Field(default=None, alias="CLERK_ISSUER")
     clerk_audience: str | None = Field(default=None, alias="CLERK_AUDIENCE")
+    external_asset_allowed_hosts: str = Field(default="", alias="EXTERNAL_ASSET_ALLOWED_HOSTS")
     allowed_origins: str = Field(alias="ALLOWED_ORIGINS")
     allowed_hosts: str = Field(default="localhost,127.0.0.1", alias="ALLOWED_HOSTS")
     max_pages_per_comic: int = Field(default=48, alias="MAX_PAGES_PER_COMIC")
     max_comics_per_day: int = Field(default=5, alias="MAX_COMICS_PER_DAY")
     max_file_size_mb: int = Field(default=10, alias="MAX_FILE_SIZE_MB")
 
-    request_limit_per_minute_free: int = 1000
-    request_limit_per_hour_free: int = 1000
-    comic_limit_per_day_free: int = 1000
-    request_limit_per_minute_pro: int = 1000
+    request_limit_per_minute_free: int = 60
+    request_limit_per_hour_free: int = 300
+    comic_limit_per_day_free: int = 20
+    request_limit_per_minute_pro: int = 120
     request_limit_per_hour_pro: int = 1000
-    comic_limit_per_day_pro: int = 1000
+    comic_limit_per_day_pro: int = 100
 
     @field_validator("database_url")
     @classmethod
@@ -72,6 +73,11 @@ class Settings(BaseSettings):
     def parsed_allowed_hosts(self) -> list[str]:
         """Split ALLOWED_HOSTS into normalized list."""
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def parsed_external_asset_allowed_hosts(self) -> list[str]:
+        """Optional allowlist for outbound asset download hosts."""
+        return [host.strip().lower() for host in self.external_asset_allowed_hosts.split(",") if host.strip()]
 
     def get_tier_limits(self, tier: str) -> dict[str, int]:
         """Get configured limits for a user tier."""

@@ -131,7 +131,7 @@ async def health_check() -> dict[str, object]:
         workers = 0
 
     health_status = "healthy" if db_ok and redis_ok else "unhealthy"
-    return {"status": health_status, "db": db_ok, "redis": redis_ok, "workers": workers}
+    return {"status": health_status}
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")

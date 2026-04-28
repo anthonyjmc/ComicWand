@@ -86,7 +86,7 @@ services:
     working_dir: /app
     command: >
       sh -c "pip install -r requirements.txt &&
-      celery -A app.workers.celery_app.celery_app flower --port=5555"
+      celery -A app.workers.celery_app.celery_app flower --port=5555 --basic_auth=$${FLOWER_BASIC_AUTH:-admin:change-me}"
     env_file:
       - ./backend/.env.example
     volumes:

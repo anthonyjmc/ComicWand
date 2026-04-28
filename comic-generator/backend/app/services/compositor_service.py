@@ -15,6 +15,7 @@ from fpdf import FPDF
 from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
 
+from app.core.network_security import validate_outbound_asset_url
 from app.services.storage_service import StorageService
 
 PAGE_WIDTH = 1800
@@ -190,9 +191,13 @@ class CompositorService:
         return f"comics/{comic_id}/{safe_title}.pdf"
 
     async def _download_image(self, url: str) -> Image.Image:
+        validate_outbound_asset_url(url)
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(url)
+            response = await client.get(url, follow_redirects=False)
             response.raise_for_status()
+        content_length = int(response.headers.get("content-length", "0") or 0)
+        if content_length > 20 * 1024 * 1024:
+            raise ValueError("Downloaded image is too large")
         return Image.open(io.BytesIO(response.content)).convert("RGB")
 
     def _load_font(self, *, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

@@ -38,6 +38,11 @@ def _is_allowed_clerk_issuer(*, issuer: str, configured_issuer: str | None) -> b
 def verify_clerk_token(token: str) -> dict[str, Any]:
     """Verify Clerk JWT token and return claims."""
     settings = get_settings()
+    if settings.is_production and (not settings.clerk_issuer or not settings.clerk_audience):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication provider is not configured correctly",
+        )
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authorization token")
 

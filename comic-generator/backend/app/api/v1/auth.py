@@ -8,8 +8,10 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timezone
+import time
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from redis.asyncio import Redis
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,8 @@ from app.workers.celery_app import celery_app
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+WEBHOOK_MAX_AGE_SECONDS = 300
+WEBHOOK_ID_TTL_SECONDS = 900
 
 
 def _verify_clerk_webhook_signature(
@@ -49,6 +53,17 @@ async def _cancel_user_active_jobs(clerk_id: str) -> None:
                 celery_app.control.revoke(task.get("id"), terminate=True)
 
 
+async def _mark_webhook_seen(*, svix_id: str) -> bool:
+    redis_client = Redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+    try:
+        # SET key value NX EX ttl -> returns True only if key is new.
+        key = f"webhook:svix:{svix_id}"
+        was_new = await redis_client.set(key, "1", ex=WEBHOOK_ID_TTL_SECONDS, nx=True)
+        return bool(was_new)
+    finally:
+        await redis_client.aclose()
+
+
 @router.post("/webhook")
 async def clerk_webhook(
     request: Request,
@@ -59,7 +74,13 @@ async def clerk_webhook(
 ) -> dict[str, str]:
     payload = await request.body()
     if not (svix_id and svix_timestamp and svix_signature):
-        return {"status": "ok"}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing webhook signature headers")
+    try:
+        timestamp_seconds = int(svix_timestamp)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook timestamp") from exc
+    if abs(int(time.time()) - timestamp_seconds) > WEBHOOK_MAX_AGE_SECONDS:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook timestamp is expired")
     if not _verify_clerk_webhook_signature(
         payload=payload,
         webhook_secret=settings.clerk_webhook_secret,
@@ -67,7 +88,10 @@ async def clerk_webhook(
         svix_timestamp=svix_timestamp,
         svix_signature=svix_signature,
     ):
-        return {"status": "ok"}
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+    is_new_event = await _mark_webhook_seen(svix_id=svix_id)
+    if not is_new_event:
+        return {"status": "duplicate"}
 
     event = json.loads(payload.decode("utf-8"))
     event_type = str(event.get("type", ""))
@@ -125,12 +149,15 @@ async def read_current_user(user_claims: dict = Depends(get_current_user), sessi
         ).scalar_one()
         or 0
     )
-    remaining = max(5 - comics_today, 0)
+    tier_limits = settings.get_tier_limits(user.tier.value)
+    daily_limit = int(tier_limits["per_day_comics"])
+    remaining = max(daily_limit - comics_today, 0)
     return {
         "id": str(user.id),
         "clerk_id": user.clerk_id,
         "email": user.email,
         "tier": user.tier.value,
         "comics_generated_today": comics_today,
+        "daily_limit": daily_limit,
         "comics_remaining_today": remaining,
     }

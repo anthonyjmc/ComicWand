@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.network_security import validate_outbound_asset_url
 from app.core.database import SessionFactory
 from app.models.comic import Comic, ComicPage, ComicStatus, PageStatus
 from app.models.user import User  # noqa: F401 — ensures Comic.user relationship resolves in worker
@@ -221,7 +222,11 @@ def _build_character_description(*, panels: list[dict]) -> str:
 
 
 async def _download_bytes(*, url: str) -> bytes:
+    validate_outbound_asset_url(url)
     async with httpx.AsyncClient(timeout=45) as client:
-        response = await client.get(url)
+        response = await client.get(url, follow_redirects=False)
         response.raise_for_status()
+        content_length = int(response.headers.get("content-length", "0") or 0)
+        if content_length > 20 * 1024 * 1024:
+            raise ValueError("Downloaded asset is too large")
         return response.content
