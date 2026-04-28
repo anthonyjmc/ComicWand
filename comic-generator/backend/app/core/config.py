@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     cloudflare_r2_endpoint: str = Field(alias="CLOUDFLARE_R2_ENDPOINT")
     clerk_secret_key: str = Field(alias="CLERK_SECRET_KEY")
     clerk_webhook_secret: str = Field(alias="CLERK_WEBHOOK_SECRET")
+    clerk_issuer: str | None = Field(default=None, alias="CLERK_ISSUER")
+    clerk_audience: str | None = Field(default=None, alias="CLERK_AUDIENCE")
     allowed_origins: str = Field(alias="ALLOWED_ORIGINS")
     allowed_hosts: str = Field(default="localhost,127.0.0.1", alias="ALLOWED_HOSTS")
     max_pages_per_comic: int = Field(default=48, alias="MAX_PAGES_PER_COMIC")

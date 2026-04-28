@@ -1,11 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { ComicCard } from '@/components/comic/ComicCard'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { handleApiError } from '@/lib/errors'
 import { useApiClient } from '@/lib/use-api-client'
 import type { ComicListItem } from '@/lib/types'
@@ -17,12 +16,15 @@ export default function DashboardPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [totalComics, setTotalComics] = useState(0)
+  const requestSequenceRef = useRef(0)
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(totalComics / pageSize)), [pageSize, totalComics])
 
   const loadComics = useCallback(async (page: number) => {
+    const requestId = ++requestSequenceRef.current
     try {
       const payload = await apiClient.listComics(page)
+      if (requestSequenceRef.current !== requestId) return
       setComics(payload.items)
       setTotalComics(payload.total)
       setPageSize(payload.limit)
@@ -84,9 +86,6 @@ export default function DashboardPage() {
     }
   }
 
-  const used = comics.length > 5 ? 5 : comics.length
-  const rateProgress = useMemo(() => (used / 5) * 100, [used])
-
   return (
     <main className='mx-auto min-h-screen max-w-6xl space-y-6 px-4 py-6 sm:px-6'>
       <header className='flex items-center justify-between'>
@@ -96,9 +95,8 @@ export default function DashboardPage() {
         </Link>
       </header>
 
-      <section className='space-y-2 rounded-xl border border-slate-700 bg-slate-900/60 p-4'>
-        <p className='text-sm text-slate-200'>{used}/5 comics used today</p>
-        <Progress value={rateProgress} />
+      <section className='rounded-xl border border-slate-700 bg-slate-900/60 p-4'>
+        <p className='text-sm text-slate-200'>{totalComics} comics in your library</p>
       </section>
 
       <section className='flex items-center justify-end'>

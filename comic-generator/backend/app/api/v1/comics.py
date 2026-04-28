@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 from redis.asyncio import Redis
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -45,9 +46,17 @@ async def _get_or_create_user(*, session: AsyncSession, claims: dict) -> User:
 
     user = User(clerk_id=clerk_id, email=email, tier=UserTier.free)
     session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    try:
+        await session.commit()
+        await session.refresh(user)
+        return user
+    except IntegrityError:
+        await session.rollback()
+        retry_result = await session.execute(statement)
+        existing_user = retry_result.scalar_one_or_none()
+        if existing_user is None:
+            raise
+        return existing_user
 
 
 def _extract_storage_path(url: str | None) -> str | None:
@@ -90,6 +99,7 @@ async def create_comic(
 ) -> ComicResponse:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
+    await session.execute(select(User.id).where(User.id == user.id).with_for_update())
     validated_request = CreateComicRequest(story_prompt=story_prompt, pages=pages, style=style, title=title)
     cleaned_prompt = sanitize_prompt(validated_request.story_prompt)
     cleaned_title = validated_request.title
@@ -99,10 +109,14 @@ async def create_comic(
         and_(Comic.user_id == user.id, func.date(Comic.created_at) == today)
     )
     daily_count = int((await session.execute(count_statement)).scalar_one() or 0)
-    if daily_count >= 1000:
+    tier_limits = settings.get_tier_limits(user.tier.value)
+    daily_limit = int(tier_limits["per_day_comics"])
+    if daily_count >= daily_limit:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Daily comic limit reached")
 
-    processing_statement = select(Comic.id).where(and_(Comic.user_id == user.id, Comic.status == ComicStatus.processing))
+    processing_statement = select(Comic.id).where(
+        and_(Comic.user_id == user.id, Comic.status.in_([ComicStatus.pending, ComicStatus.processing]))
+    )
     active_processing = (await session.execute(processing_statement)).scalar_one_or_none()
     if active_processing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only one processing comic is allowed")

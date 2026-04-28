@@ -34,12 +34,12 @@ export class ApiClient {
 
   private async request<T>({ path, method = 'GET', body }: RequestArgs): Promise<T> {
     const isFormData = body instanceof FormData
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
     let attempt = 0
 
     while (attempt < 3) {
       attempt += 1
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
       try {
         const response = await fetch(`${this.baseUrl}${path}`, {
@@ -64,6 +64,7 @@ export class ApiClient {
           const payload = await response.json().catch(() => null)
           const detail = payload?.detail ?? 'Request failed.'
           if (response.status >= 500 && attempt < 3) {
+            clearTimeout(timeout)
             await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)))
             continue
           }
@@ -78,10 +79,11 @@ export class ApiClient {
         if (error instanceof DOMException && error.name === 'AbortError') throw new ApiError('Request timeout. Please try again.', 408)
         if (attempt >= 3) throw new Error('Network error')
         await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)))
+      } finally {
+        clearTimeout(timeout)
       }
     }
 
-    clearTimeout(timeout)
     throw new Error('Network error')
   }
 
