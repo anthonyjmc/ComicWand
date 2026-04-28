@@ -106,7 +106,7 @@ class CompositorService:
         title: str,
         comic_id: str,
     ) -> str:
-        """Generate final PDF, upload to R2, and return signed URL."""
+        """Generate final PDF, upload to R2, and return stable storage URL."""
         operation_started_at = time.perf_counter()
         logger.bind(user_id="system", action="generate_pdf", duration_ms=0).info(
             "PDF generation started comic_id={comic_id}",
@@ -150,14 +150,13 @@ class CompositorService:
                     continue
 
         pdf_path = f"comics/{comic_id}/final.pdf"
-        await asyncio.to_thread(self.storage_service.upload_file, pdf_bytes, pdf_path, "application/pdf")
-        signed_url = await asyncio.to_thread(self.storage_service.get_signed_url, pdf_path, 604800)
+        uploaded_url = await asyncio.to_thread(self.storage_service.upload_file, pdf_bytes, pdf_path, "application/pdf")
         duration_ms = int((time.perf_counter() - operation_started_at) * 1000)
         logger.bind(user_id="system", action="generate_pdf", duration_ms=duration_ms).info(
             "PDF generation finished comic_id={comic_id}",
             comic_id=comic_id,
         )
-        return signed_url
+        return uploaded_url
 
     async def _download_image(self, url: str) -> Image.Image:
         async with httpx.AsyncClient(timeout=30) as client:

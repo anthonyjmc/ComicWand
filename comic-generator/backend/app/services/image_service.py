@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 import replicate
+from replicate.exceptions import ReplicateError
 from fastapi import HTTPException, UploadFile, status
 from PIL import Image, UnidentifiedImageError
 from loguru import logger
@@ -24,8 +25,8 @@ STYLE_PREFIXES: dict[str, str] = {
     "noir": "noir comic style, high contrast black and white, dramatic shadows, vintage aesthetic, sin city style",
 }
 NEGATIVE_PROMPT = "blurry, deformed, ugly, inconsistent, text, watermark, signature"
-FLUX_MODEL = "black-forest-labs/flux-1.1-pro"
-MAX_RETRIES = 3
+MAX_RETRIES = 6
+REPLICATE_429_COOLDOWN_SECONDS = 12.0
 IMAGE_TIMEOUT_SECONDS = 120
 
 
@@ -37,6 +38,10 @@ class ImageService:
         self.settings = settings
         self.client = replicate.Client(api_token=settings.replicate_api_token)
         self.storage_service = storage_service or StorageService()
+        self._replicate_image_model = settings.replicate_image_model.strip()
+
+    def _is_flux_schnell(self) -> bool:
+        return "flux-schnell" in self._replicate_image_model.lower()
 
     async def generate_panel_image(
         self,
@@ -56,17 +61,7 @@ class ImageService:
             style=style,
             character_description=character_description,
         )
-        input_payload: dict[str, Any] = {
-            "prompt": prompt,
-            "negative_prompt": NEGATIVE_PROMPT,
-            "width": 768,
-            "height": 768,
-            "num_inference_steps": 28,
-            "guidance_scale": 3.5,
-            "output_format": "webp",
-        }
-        if reference_image_url:
-            input_payload["ip_adapter_image"] = reference_image_url
+        input_payload = self._build_panel_replicate_input(prompt=prompt, reference_image_url=reference_image_url)
 
         output_url = await self._run_replicate_with_retries(input_payload=input_payload, action="image_panel_generate")
         duration_ms = int((time.perf_counter() - operation_started_at) * 1000)
@@ -88,17 +83,7 @@ class ImageService:
             f"Title text visible in composition: '{title}'. "
             "Cinematic composition, compelling character pose, high detail."
         )
-        input_payload: dict[str, Any] = {
-            "prompt": prompt,
-            "negative_prompt": NEGATIVE_PROMPT,
-            "width": 768,
-            "height": 1024,
-            "num_inference_steps": 28,
-            "guidance_scale": 3.5,
-            "output_format": "webp",
-        }
-        if reference_image_url:
-            input_payload["ip_adapter_image"] = reference_image_url
+        input_payload = self._build_cover_replicate_input(prompt=prompt, reference_image_url=reference_image_url)
 
         output_url = await self._run_replicate_with_retries(input_payload=input_payload, action="image_cover_generate")
         duration_ms = int((time.perf_counter() - operation_started_at) * 1000)
@@ -146,13 +131,64 @@ class ImageService:
         )
         return uploaded_url
 
+    def _build_panel_replicate_input(self, *, prompt: str, reference_image_url: str | None) -> dict[str, Any]:
+        if self._is_flux_schnell():
+            return {
+                "prompt": self._flux_schnell_prompt(prompt=prompt, reference_image_url=reference_image_url),
+                "aspect_ratio": "1:1",
+                "num_inference_steps": 4,
+                "output_format": "webp",
+                "megapixels": 1,
+            }
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "negative_prompt": NEGATIVE_PROMPT,
+            "width": 768,
+            "height": 768,
+            "num_inference_steps": 28,
+            "guidance_scale": 3.5,
+            "output_format": "webp",
+        }
+        if reference_image_url:
+            payload["ip_adapter_image"] = reference_image_url
+        return payload
+
+    def _build_cover_replicate_input(self, *, prompt: str, reference_image_url: str | None) -> dict[str, Any]:
+        if self._is_flux_schnell():
+            return {
+                "prompt": self._flux_schnell_prompt(prompt=prompt, reference_image_url=reference_image_url),
+                "aspect_ratio": "3:4",
+                "num_inference_steps": 4,
+                "output_format": "webp",
+                "megapixels": 1,
+            }
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "negative_prompt": NEGATIVE_PROMPT,
+            "width": 768,
+            "height": 1024,
+            "num_inference_steps": 28,
+            "guidance_scale": 3.5,
+            "output_format": "webp",
+        }
+        if reference_image_url:
+            payload["ip_adapter_image"] = reference_image_url
+        return payload
+
+    def _flux_schnell_prompt(self, *, prompt: str, reference_image_url: str | None) -> str:
+        """FLUX Schnell has no negative_prompt / ip_adapter; fold constraints into the prompt."""
+        extra = f"Avoid: {NEGATIVE_PROMPT}."
+        if reference_image_url:
+            return f"{prompt}\n{extra}\nNote: reference image is not applied (Schnell is text-only)."
+        return f"{prompt}\n{extra}"
+
     async def _run_replicate_with_retries(self, *, input_payload: dict[str, Any], action: str) -> str:
         last_error: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):
             attempt_started_at = time.perf_counter()
             try:
                 output = await asyncio.wait_for(
-                    asyncio.to_thread(self.client.run, FLUX_MODEL, input=input_payload),
+                    asyncio.to_thread(self.client.run, self._replicate_image_model, input=input_payload),
                     timeout=IMAGE_TIMEOUT_SECONDS,
                 )
                 output_url = self._extract_output_url(output=output)
@@ -169,6 +205,20 @@ class ImageService:
                     "Replicate generation timed out attempt={attempt}",
                     attempt=attempt,
                 )
+            except ReplicateError as exc:
+                last_error = exc
+                duration_ms = int((time.perf_counter() - attempt_started_at) * 1000)
+                logger.bind(user_id="system", action=action, duration_ms=duration_ms).warning(
+                    "Replicate API error attempt={attempt} status={status} detail={detail}",
+                    attempt=attempt,
+                    status=exc.status,
+                    detail=(exc.detail or "")[:200],
+                )
+                if exc.status in {401, 402, 403, 404}:
+                    detail = (exc.detail or exc.title or "Replicate API error").strip()
+                    raise RuntimeError(
+                        f"Replicate cannot run this model (HTTP {exc.status}): {detail}"
+                    ) from exc
             except Exception as exc:
                 last_error = exc
                 duration_ms = int((time.perf_counter() - attempt_started_at) * 1000)
@@ -179,7 +229,10 @@ class ImageService:
                 )
 
             if attempt < MAX_RETRIES:
-                await asyncio.sleep(2 ** (attempt - 1))
+                backoff = 2 ** (attempt - 1)
+                if isinstance(last_error, ReplicateError) and last_error.status == 429:
+                    backoff = max(backoff, REPLICATE_429_COOLDOWN_SECONDS)
+                await asyncio.sleep(backoff)
 
         if last_error is None:
             raise RuntimeError("Image generation failed without a specific error")
