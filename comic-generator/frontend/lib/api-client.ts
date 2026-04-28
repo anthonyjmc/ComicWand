@@ -12,6 +12,8 @@ interface ApiClientArgs {
 }
 
 const API_TIMEOUT_MS = 30_000
+const API_MAX_RETRIES = 3
+const COMICS_PAGE_SIZE = 20
 
 export class ApiClient {
   private baseUrl: string
@@ -36,7 +38,7 @@ export class ApiClient {
     const isFormData = body instanceof FormData
     let attempt = 0
 
-    while (attempt < 3) {
+    while (attempt < API_MAX_RETRIES) {
       attempt += 1
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
@@ -63,7 +65,7 @@ export class ApiClient {
         if (!response.ok) {
           const payload = await response.json().catch(() => null)
           const detail = payload?.detail ?? 'Request failed.'
-          if (response.status >= 500 && attempt < 3) {
+          if (response.status >= 500 && attempt < API_MAX_RETRIES) {
             clearTimeout(timeout)
             await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)))
             continue
@@ -77,7 +79,7 @@ export class ApiClient {
       } catch (error) {
         if (error instanceof ApiError || error instanceof RateLimitError) throw error
         if (error instanceof DOMException && error.name === 'AbortError') throw new ApiError('Request timeout. Please try again.', 408)
-        if (attempt >= 3) throw new Error('Network error')
+        if (attempt >= API_MAX_RETRIES) throw new Error('Network error')
         await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)))
       } finally {
         clearTimeout(timeout)
@@ -96,7 +98,7 @@ export class ApiClient {
   }
 
   async listComics(page: number): Promise<ComicListResponse> {
-    const limit = 20
+    const limit = COMICS_PAGE_SIZE
     const offset = Math.max(0, (page - 1) * limit)
     return this.request<ComicListResponse>({ path: `/api/v1/comics?limit=${limit}&offset=${offset}` })
   }

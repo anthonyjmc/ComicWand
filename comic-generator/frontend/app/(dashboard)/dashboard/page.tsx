@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const requestSequenceRef = useRef(0)
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(totalComics / pageSize)), [pageSize, totalComics])
+  const processingComics = useMemo(() => comics.filter((comic) => comic.status === 'processing'), [comics])
 
   const loadComics = useCallback(async (page: number) => {
     const requestId = ++requestSequenceRef.current
@@ -38,10 +39,9 @@ export default function DashboardPage() {
   }, [currentPage, loadComics])
 
   useEffect(() => {
-    const processing = comics.filter((comic) => comic.status === 'processing')
-    if (!processing.length) return
+    if (!processingComics.length) return
     const interval = setInterval(async () => {
-      const updates = await Promise.all(processing.map((comic) => apiClient.getComicStatus(comic.id).catch(() => null)))
+      const updates = await Promise.all(processingComics.map((comic) => apiClient.getComicStatus(comic.id).catch(() => null)))
       const nextMap: Record<string, number> = {}
       let shouldRefreshList = false
       for (const update of updates) {
@@ -53,7 +53,7 @@ export default function DashboardPage() {
       if (shouldRefreshList) loadComics(currentPage)
     }, 6000)
     return () => clearInterval(interval)
-  }, [apiClient, comics, currentPage, loadComics])
+  }, [apiClient, currentPage, loadComics, processingComics])
 
   async function handleDelete(comicId: string) {
     try {

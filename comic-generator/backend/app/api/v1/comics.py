@@ -30,6 +30,8 @@ settings = get_settings()
 storage_service = StorageService()
 _comic_list_cache: dict[tuple[str, int, int], tuple[float, ComicListResponse]] = {}
 _comic_list_cache_ttl_seconds = 10.0
+SIGNED_URL_EXPIRATION_SECONDS = 604800
+MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
 
 
 async def _get_or_create_user(*, session: AsyncSession, claims: dict) -> User:
@@ -79,6 +81,23 @@ def _invalidate_comic_list_cache(user_id: UUID) -> None:
         _comic_list_cache.pop(cache_key, None)
 
 
+def _to_signed_url(url: str | None) -> str | None:
+    object_path = _extract_storage_path(url)
+    if not object_path:
+        return url
+    return storage_service.get_signed_url(object_path, expires_in=SIGNED_URL_EXPIRATION_SECONDS)
+
+
+async def _get_user_owned_comic(*, session: AsyncSession, comic_id: UUID, user_id: UUID) -> Comic:
+    result = await session.execute(select(Comic).where(Comic.id == comic_id))
+    comic = result.scalar_one_or_none()
+    if comic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
+    if comic.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
+    return comic
+
+
 @router.post(
     "/create",
     response_model=ComicResponse,
@@ -125,7 +144,7 @@ async def create_comic(
     if reference_image is not None:
         validate_file_extension(reference_image.filename or "")
         image_bytes = await reference_image.read()
-        if len(image_bytes) > 10 * 1024 * 1024:
+        if len(image_bytes) > MAX_REFERENCE_IMAGE_BYTES:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Reference image exceeds 10MB")
         object_path = f"comics/{user.id}/references/{datetime.now(timezone.utc).timestamp()}-{reference_image.filename}"
         reference_image_url = await asyncio.to_thread(
@@ -172,12 +191,7 @@ async def get_comic_status(
 ) -> ComicStatusResponse:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
-    result = await session.execute(select(Comic).where(Comic.id == comic_id))
-    comic = result.scalar_one_or_none()
-    if comic is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
-    if comic.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
+    comic = await _get_user_owned_comic(session=session, comic_id=comic_id, user_id=user.id)
 
     payload = ComicStatusResponse(comic_id=comic.id, status=comic.status.value)
     if comic.status == ComicStatus.processing:
@@ -188,8 +202,7 @@ async def get_comic_status(
         finally:
             await redis_client.aclose()
     if comic.status == ComicStatus.completed:
-        pdf_path = _extract_storage_path(comic.pdf_url)
-        payload.pdf_url = storage_service.get_signed_url(pdf_path, expires_in=604800) if pdf_path else comic.pdf_url
+        payload.pdf_url = _to_signed_url(comic.pdf_url)
     if comic.status == ComicStatus.failed:
         payload.error_message = "Comic generation failed. Please retry."
     return payload
@@ -235,16 +248,10 @@ async def list_user_comics(
         pdf_url = None
         thumbnail_url = None
         if comic.status == ComicStatus.completed:
-            pdf_path = _extract_storage_path(comic.pdf_url)
-            pdf_url = storage_service.get_signed_url(pdf_path, expires_in=604800) if pdf_path else comic.pdf_url
+            pdf_url = _to_signed_url(comic.pdf_url)
             thumbnail_raw_url = comic.thumbnail_url
             if thumbnail_raw_url:
-                thumbnail_path = _extract_storage_path(thumbnail_raw_url)
-                thumbnail_url = (
-                    storage_service.get_signed_url(thumbnail_path, expires_in=604800)
-                    if thumbnail_path
-                    else thumbnail_raw_url
-                )
+                thumbnail_url = _to_signed_url(thumbnail_raw_url)
         items.append(
             ComicListItem(
                 id=comic.id,
@@ -277,12 +284,7 @@ async def delete_comic(
 ) -> Response:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
-    result = await session.execute(select(Comic).where(Comic.id == comic_id))
-    comic = result.scalar_one_or_none()
-    if comic is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
-    if comic.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
+    comic = await _get_user_owned_comic(session=session, comic_id=comic_id, user_id=user.id)
 
     if comic.status == ComicStatus.processing:
         inspect_result = await asyncio.to_thread(celery_app.control.inspect().active)
@@ -318,12 +320,7 @@ async def list_comic_pages(
 ) -> list[ComicPageResponse]:
     del request, response
     user = await _get_or_create_user(session=session, claims=user_claims)
-    result = await session.execute(select(Comic).where(Comic.id == comic_id))
-    comic = result.scalar_one_or_none()
-    if comic is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comic not found")
-    if comic.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this comic")
+    comic = await _get_user_owned_comic(session=session, comic_id=comic_id, user_id=user.id)
     if comic.status != ComicStatus.completed:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Comic pages are available only when completed")
 
@@ -335,7 +332,6 @@ async def list_comic_pages(
     for page in pages:
         if not page.image_urls:
             continue
-        image_path = _extract_storage_path(page.image_urls[-1])
-        image_url = storage_service.get_signed_url(image_path, expires_in=604800) if image_path else page.image_urls[-1]
+        image_url = _to_signed_url(page.image_urls[-1]) or page.image_urls[-1]
         response_items.append(ComicPageResponse(page_number=page.page_number, image_url=image_url))
     return response_items
