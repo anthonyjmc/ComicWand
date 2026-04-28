@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import tempfile
 import textwrap
 import time
@@ -149,14 +150,44 @@ class CompositorService:
                 except OSError:
                     continue
 
-        pdf_path = f"comics/{comic_id}/final.pdf"
-        uploaded_url = await asyncio.to_thread(self.storage_service.upload_file, pdf_bytes, pdf_path, "application/pdf")
+        preferred_pdf_path = self._build_pdf_path(title=title, comic_id=comic_id)
+        fallback_pdf_paths = [
+            preferred_pdf_path,
+            f"comics/{comic_id}/comic.pdf",
+            f"comics/{comic_id}/final.pdf",
+        ]
+        uploaded_url: str | None = None
+        last_upload_error: Exception | None = None
+        for pdf_path in fallback_pdf_paths:
+            try:
+                uploaded_url = await asyncio.to_thread(
+                    self.storage_service.upload_file,
+                    pdf_bytes,
+                    pdf_path,
+                    "application/pdf",
+                )
+                break
+            except Exception as exc:
+                last_upload_error = exc
+                logger.bind(user_id="system", action="generate_pdf", duration_ms=0).warning(
+                    "PDF upload failed for path={pdf_path}, trying fallback if available",
+                    pdf_path=pdf_path,
+                )
+        if uploaded_url is None:
+            if last_upload_error is not None:
+                raise last_upload_error
+            raise RuntimeError("PDF upload failed without a specific error")
         duration_ms = int((time.perf_counter() - operation_started_at) * 1000)
         logger.bind(user_id="system", action="generate_pdf", duration_ms=duration_ms).info(
             "PDF generation finished comic_id={comic_id}",
             comic_id=comic_id,
         )
         return uploaded_url
+
+    def _build_pdf_path(self, *, title: str, comic_id: str) -> str:
+        normalized_title = re.sub(r"[^a-zA-Z0-9]+", "-", (title or "").strip()).strip("-").lower()
+        safe_title = normalized_title or "comic"
+        return f"comics/{comic_id}/{safe_title}.pdf"
 
     async def _download_image(self, url: str) -> Image.Image:
         async with httpx.AsyncClient(timeout=30) as client:
