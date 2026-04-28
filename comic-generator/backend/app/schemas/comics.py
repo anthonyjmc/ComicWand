@@ -70,6 +70,7 @@ class ComicListItem(BaseModel):
     style: str = Field(description="Comic visual style")
     created_at: datetime = Field(description="Creation timestamp")
     pdf_url: str | None = Field(default=None, description="Signed PDF URL for completed comics")
+    thumbnail_url: str | None = Field(default=None, description="Signed thumbnail URL for dashboard preview")
 
     model_config = {"from_attributes": True}
 

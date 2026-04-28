@@ -1,7 +1,5 @@
 """Comic generation API endpoints."""
 
-from __future__ import annotations
-
 import asyncio
 from datetime import datetime, timezone
 from uuid import UUID
@@ -53,7 +51,13 @@ def _extract_storage_path(url: str | None) -> str | None:
     if not url:
         return None
     parsed = urlparse(url)
-    return parsed.path.lstrip("/")
+    path = parsed.path.lstrip("/")
+    if not path:
+        return None
+    bucket_prefix = f"{settings.cloudflare_r2_bucket}/"
+    if path.startswith(bucket_prefix):
+        return path[len(bucket_prefix) :]
+    return path
 
 
 @router.post(
@@ -61,8 +65,8 @@ def _extract_storage_path(url: str | None) -> str | None:
     response_model=ComicResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-@slowapi_limiter.limit("200/minute", key_func=get_user_rate_limit_key)
-@slowapi_limiter.limit("5/day", key_func=get_user_rate_limit_key)
+@slowapi_limiter.limit("1000/minute", key_func=get_user_rate_limit_key)
+@slowapi_limiter.limit("1000/day", key_func=get_user_rate_limit_key)
 async def create_comic(
     request: Request,
     response: Response,
@@ -85,7 +89,7 @@ async def create_comic(
         and_(Comic.user_id == user.id, func.date(Comic.created_at) == today)
     )
     daily_count = int((await session.execute(count_statement)).scalar_one() or 0)
-    if daily_count >= 5:
+    if daily_count >= 1000:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Daily comic limit reached")
 
     processing_statement = select(Comic.id).where(and_(Comic.user_id == user.id, Comic.status == ComicStatus.processing))
@@ -133,7 +137,7 @@ async def create_comic(
     response_model=ComicStatusResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-@slowapi_limiter.limit("200/minute", key_func=get_user_rate_limit_key)
+@slowapi_limiter.limit("1000/minute", key_func=get_user_rate_limit_key)
 async def get_comic_status(
     request: Request,
     response: Response,
@@ -171,7 +175,7 @@ async def get_comic_status(
     response_model=ComicListResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-@slowapi_limiter.limit("200/minute", key_func=get_user_rate_limit_key)
+@slowapi_limiter.limit("1000/minute", key_func=get_user_rate_limit_key)
 async def list_user_comics(
     request: Request,
     response: Response,
@@ -200,9 +204,24 @@ async def list_user_comics(
     items: list[ComicListItem] = []
     for comic in comics:
         pdf_url = None
+        thumbnail_url = None
         if comic.status == ComicStatus.completed:
             pdf_path = _extract_storage_path(comic.pdf_url)
             pdf_url = storage_service.get_signed_url(pdf_path, expires_in=604800) if pdf_path else comic.pdf_url
+            thumbnail_result = await session.execute(
+                select(ComicPage)
+                .where(ComicPage.comic_id == comic.id)
+                .order_by(ComicPage.page_number.asc())
+                .limit(1)
+            )
+            thumbnail_page = thumbnail_result.scalar_one_or_none()
+            if thumbnail_page and thumbnail_page.image_urls:
+                thumbnail_path = _extract_storage_path(thumbnail_page.image_urls[-1])
+                thumbnail_url = (
+                    storage_service.get_signed_url(thumbnail_path, expires_in=604800)
+                    if thumbnail_path
+                    else thumbnail_page.image_urls[-1]
+                )
         items.append(
             ComicListItem(
                 id=comic.id,
@@ -212,6 +231,7 @@ async def list_user_comics(
                 style=comic.style,
                 created_at=comic.created_at,
                 pdf_url=pdf_url,
+                thumbnail_url=thumbnail_url,
             )
         )
     return ComicListResponse(items=items, limit=safe_limit, offset=safe_offset, total=total)
@@ -222,7 +242,7 @@ async def list_user_comics(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_rate_limit)],
 )
-@slowapi_limiter.limit("200/minute", key_func=get_user_rate_limit_key)
+@slowapi_limiter.limit("1000/minute", key_func=get_user_rate_limit_key)
 async def delete_comic(
     request: Request,
     response: Response,
@@ -262,7 +282,7 @@ async def delete_comic(
     response_model=list[ComicPageResponse],
     dependencies=[Depends(check_rate_limit)],
 )
-@slowapi_limiter.limit("200/minute", key_func=get_user_rate_limit_key)
+@slowapi_limiter.limit("1000/minute", key_func=get_user_rate_limit_key)
 async def list_comic_pages(
     request: Request,
     response: Response,
@@ -285,4 +305,11 @@ async def list_comic_pages(
         select(ComicPage).where(ComicPage.comic_id == comic.id).order_by(ComicPage.page_number.asc())
     )
     pages = pages_result.scalars().all()
-    return [ComicPageResponse(page_number=page.page_number, image_url=page.image_urls[-1]) for page in pages if page.image_urls]
+    response_items: list[ComicPageResponse] = []
+    for page in pages:
+        if not page.image_urls:
+            continue
+        image_path = _extract_storage_path(page.image_urls[-1])
+        image_url = storage_service.get_signed_url(image_path, expires_in=604800) if image_path else page.image_urls[-1]
+        response_items.append(ComicPageResponse(page_number=page.page_number, image_url=image_url))
+    return response_items

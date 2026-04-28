@@ -20,6 +20,7 @@ export interface ComicListItem {
   style: string
   created_at: string
   pdf_url?: string | null
+  thumbnail_url?: string | null
 }
 
 export interface ComicListResponse {

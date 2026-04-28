@@ -20,6 +20,7 @@ interface ComicCardProps {
 export function ComicCard({ comic, progress = 0, onDelete, onRetry }: ComicCardProps) {
   const statusVariant = comic.status === 'pending' ? 'yellow' : comic.status === 'processing' ? 'blue' : comic.status === 'completed' ? 'green' : 'red'
   const relativeDate = formatDistanceToNow(new Date(comic.created_at), { addSuffix: true })
+  const previewImage = comic.thumbnail_url ?? '/sample-1.svg'
 
   return (
     <Card className='overflow-hidden'>
@@ -27,7 +28,7 @@ export function ComicCard({ comic, progress = 0, onDelete, onRetry }: ComicCardP
         {comic.status === 'pending' || comic.status === 'processing' ? (
           <Skeleton className='h-40 w-full' />
         ) : (
-          <Image src={comic.pdf_url ?? '/sample-1.svg'} alt={`${comic.title} cover`} className='h-40 w-full rounded-lg object-cover' width={640} height={360} unoptimized />
+          <Image src={previewImage} alt={`${comic.title} cover`} className='h-40 w-full rounded-lg object-cover' width={640} height={360} unoptimized />
         )}
 
         <div className='space-y-2'>
