@@ -14,22 +14,29 @@ export default function DashboardPage() {
   const apiClient = useApiClient()
   const [comics, setComics] = useState<ComicListItem[]>([])
   const [progressMap, setProgressMap] = useState<Record<string, number>>({})
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalComics, setTotalComics] = useState(0)
 
-  const loadComics = useCallback(async () => {
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(totalComics / pageSize)), [pageSize, totalComics])
+
+  const loadComics = useCallback(async (page: number) => {
     try {
-      const payload = await apiClient.listComics(1)
+      const payload = await apiClient.listComics(page)
       setComics(payload.items)
+      setTotalComics(payload.total)
+      setPageSize(payload.limit)
     } catch (error) {
       toast.error(handleApiError(error))
     }
   }, [apiClient])
 
   useEffect(() => {
-    loadComics()
-  }, [loadComics])
+    loadComics(currentPage)
+  }, [currentPage, loadComics])
 
   useEffect(() => {
-    const processing = comics.filter((comic) => comic.status === 'processing' || comic.status === 'pending')
+    const processing = comics.filter((comic) => comic.status === 'processing')
     if (!processing.length) return
     const interval = setInterval(async () => {
       const updates = await Promise.all(processing.map((comic) => apiClient.getComicStatus(comic.id).catch(() => null)))
@@ -41,16 +48,20 @@ export default function DashboardPage() {
         if (update.status === 'completed' || update.status === 'failed') shouldRefreshList = true
       }
       setProgressMap((current) => ({ ...current, ...nextMap }))
-      if (shouldRefreshList) loadComics()
-    }, 3000)
+      if (shouldRefreshList) loadComics(currentPage)
+    }, 6000)
     return () => clearInterval(interval)
-  }, [apiClient, comics, loadComics])
+  }, [apiClient, comics, currentPage, loadComics])
 
   async function handleDelete(comicId: string) {
     try {
       await apiClient.deleteComic(comicId)
       toast.success('Comic deleted')
-      await loadComics()
+      const nextTotal = Math.max(0, totalComics - 1)
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize))
+      const nextPage = Math.min(currentPage, nextTotalPages)
+      setCurrentPage(nextPage)
+      await loadComics(nextPage)
     } catch (error) {
       toast.error(handleApiError(error))
     }
@@ -67,7 +78,7 @@ export default function DashboardPage() {
     try {
       await apiClient.createComic(formData)
       toast.success('Retry started')
-      await loadComics()
+      await loadComics(currentPage)
     } catch (error) {
       toast.error(handleApiError(error))
     }
@@ -88,6 +99,18 @@ export default function DashboardPage() {
       <section className='space-y-2 rounded-xl border border-slate-700 bg-slate-900/60 p-4'>
         <p className='text-sm text-slate-200'>{used}/5 comics used today</p>
         <Progress value={rateProgress} />
+      </section>
+
+      <section className='flex items-center justify-end'>
+        <div className='flex items-center gap-3'>
+          <Button variant='outline' size='sm' disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>
+            {'<'}
+          </Button>
+          <span className='min-w-8 rounded-md bg-yellow-400 px-2 py-1 text-center text-sm font-semibold text-slate-900'>{currentPage}</span>
+          <Button variant='outline' size='sm' disabled={currentPage >= totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>
+            {'>'}
+          </Button>
+        </div>
       </section>
 
       <section className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>

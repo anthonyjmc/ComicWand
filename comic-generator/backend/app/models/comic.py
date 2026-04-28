@@ -46,6 +46,7 @@ class Comic(Base):
     reference_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     story_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     pdf_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

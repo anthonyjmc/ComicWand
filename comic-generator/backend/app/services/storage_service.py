@@ -30,6 +30,7 @@ class StorageService:
         )
         parsed_endpoint = urlparse(settings.cloudflare_r2_endpoint)
         self.public_base_url = f"{parsed_endpoint.scheme}://{self.bucket}.{parsed_endpoint.netloc}"
+        self._signed_url_cache: dict[tuple[str, int], tuple[str, float]] = {}
 
     def upload_file(self, file_bytes: bytes, path: str, content_type: str) -> str:
         """Upload file bytes and return public URL."""
@@ -56,6 +57,14 @@ class StorageService:
 
     def get_signed_url(self, path: str, expires_in: int = 604800) -> str:
         """Create signed URL for a stored object."""
+        cache_key = (path, expires_in)
+        now = time.time()
+        cached = self._signed_url_cache.get(cache_key)
+        if cached:
+            cached_url, cache_expires_at = cached
+            if cache_expires_at > now:
+                return cached_url
+
         operation_started_at = time.perf_counter()
         logger.bind(user_id="system", action="storage_sign_url", duration_ms=0).info(
             "Signed URL generation started path={path}",
@@ -74,6 +83,9 @@ class StorageService:
             "Signed URL generation finished path={path}",
             path=path,
         )
+        # Reuse signatures briefly to avoid repeated sign calls on dashboard polling.
+        cache_ttl_seconds = min(max(expires_in * 0.1, 30), 300)
+        self._signed_url_cache[cache_key] = (str(signed_url), now + cache_ttl_seconds)
         return str(signed_url)
 
     def delete_file(self, path: str) -> bool:

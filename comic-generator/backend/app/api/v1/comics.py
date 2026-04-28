@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+import time
 from uuid import UUID
 from urllib.parse import urlparse
 
@@ -26,6 +27,8 @@ from app.workers.celery_app import celery_app
 router = APIRouter(prefix="/comics", tags=["comics"])
 settings = get_settings()
 storage_service = StorageService()
+_comic_list_cache: dict[tuple[str, int, int], tuple[float, ComicListResponse]] = {}
+_comic_list_cache_ttl_seconds = 10.0
 
 
 async def _get_or_create_user(*, session: AsyncSession, claims: dict) -> User:
@@ -58,6 +61,13 @@ def _extract_storage_path(url: str | None) -> str | None:
     if path.startswith(bucket_prefix):
         return path[len(bucket_prefix) :]
     return path
+
+
+def _invalidate_comic_list_cache(user_id: UUID) -> None:
+    user_id_key = str(user_id)
+    keys_to_delete = [key for key in _comic_list_cache if key[0] == user_id_key]
+    for cache_key in keys_to_delete:
+        _comic_list_cache.pop(cache_key, None)
 
 
 @router.post(
@@ -123,6 +133,7 @@ async def create_comic(
     session.add(comic)
     await session.commit()
     await session.refresh(comic)
+    _invalidate_comic_list_cache(user.id)
     generate_comic_task.delay(str(comic.id), str(user.id))
 
     return ComicResponse(
@@ -188,6 +199,11 @@ async def list_user_comics(
     safe_limit = min(max(limit, 1), 20)
     safe_offset = max(offset, 0)
     user = await _get_or_create_user(session=session, claims=user_claims)
+    cache_key = (str(user.id), safe_limit, safe_offset)
+    now = time.time()
+    cached = _comic_list_cache.get(cache_key)
+    if cached and cached[0] > now:
+        return cached[1]
 
     total = int(
         (await session.execute(select(func.count(Comic.id)).where(Comic.user_id == user.id))).scalar_one() or 0
@@ -200,7 +216,6 @@ async def list_user_comics(
         .limit(safe_limit)
     )
     comics = result.scalars().all()
-
     items: list[ComicListItem] = []
     for comic in comics:
         pdf_url = None
@@ -208,19 +223,13 @@ async def list_user_comics(
         if comic.status == ComicStatus.completed:
             pdf_path = _extract_storage_path(comic.pdf_url)
             pdf_url = storage_service.get_signed_url(pdf_path, expires_in=604800) if pdf_path else comic.pdf_url
-            thumbnail_result = await session.execute(
-                select(ComicPage)
-                .where(ComicPage.comic_id == comic.id)
-                .order_by(ComicPage.page_number.asc())
-                .limit(1)
-            )
-            thumbnail_page = thumbnail_result.scalar_one_or_none()
-            if thumbnail_page and thumbnail_page.image_urls:
-                thumbnail_path = _extract_storage_path(thumbnail_page.image_urls[-1])
+            thumbnail_raw_url = comic.thumbnail_url
+            if thumbnail_raw_url:
+                thumbnail_path = _extract_storage_path(thumbnail_raw_url)
                 thumbnail_url = (
                     storage_service.get_signed_url(thumbnail_path, expires_in=604800)
                     if thumbnail_path
-                    else thumbnail_page.image_urls[-1]
+                    else thumbnail_raw_url
                 )
         items.append(
             ComicListItem(
@@ -234,7 +243,9 @@ async def list_user_comics(
                 thumbnail_url=thumbnail_url,
             )
         )
-    return ComicListResponse(items=items, limit=safe_limit, offset=safe_offset, total=total)
+    response_payload = ComicListResponse(items=items, limit=safe_limit, offset=safe_offset, total=total)
+    _comic_list_cache[cache_key] = (now + _comic_list_cache_ttl_seconds, response_payload)
+    return response_payload
 
 
 @router.delete(
@@ -274,6 +285,7 @@ async def delete_comic(
 
     await session.delete(comic)
     await session.commit()
+    _invalidate_comic_list_cache(user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

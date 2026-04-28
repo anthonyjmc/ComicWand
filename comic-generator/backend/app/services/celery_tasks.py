@@ -121,6 +121,9 @@ async def _run_generation_pipeline(comic_id: str, user_id: str) -> dict[str, str
                     image_urls=panel_urls + [page_public_url],
                     dialogues=dialogues,
                 )
+                if page_number == 1 and not comic.thumbnail_url:
+                    comic.thumbnail_url = page_public_url
+                    await session.commit()
                 page_progress = 15 + int((page_index / max(total_pages, 1)) * 65)
                 await _set_progress(redis_client=redis_client, progress_key=progress_key, progress=page_progress)
 
