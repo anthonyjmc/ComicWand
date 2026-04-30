@@ -1,3 +1,5 @@
+https://github.com/user-attachments/assets/115681e2-6b9f-49f2-9c0c-ea54ecedf180
+
 # Comic Book Generator
 
 Production-oriented web app that generates comic books from user prompts, keeps visual consistency with reference images, and exports downloadable PDFs.
